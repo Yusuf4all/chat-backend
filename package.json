@@ -1,0 +1,27 @@
+{
+  "name": "firstproject",
+  "version": "1.0.0",
+  "description": "This is my first project of node js",
+  "main": "index.js",
+  "dependencies": {
+    "@sendgrid/mail": "^7.4.7",
+    "axios": "^0.21.4",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^10.0.0",
+    "express": "^4.17.1",
+    "express-jwt": "^6.1.0",
+    "google-auth-library": "^7.10.0",
+    "jsonwebtoken": "^8.5.1",
+    "mongoose": "^6.0.7",
+    "nodemon": "^2.0.12",
+    "randomatic": "^3.1.1",
+    "socket.io": "^4.3.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
