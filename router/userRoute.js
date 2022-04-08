@@ -13,35 +13,39 @@ const ROUTE = Router();
 ROUTE.post("/sign-up", validator.signUpValidate, userController.signup);
 ROUTE.post("/sign-in", validator.signInValidate, userController.signin);
 ROUTE.put(
-  "/forgot-password",
-  validator.forgotPasswordValidate,
-  userController.forgotPassword
+	"/forgot-password",
+	validator.forgotPasswordValidate,
+	userController.forgotPassword
 );
 ROUTE.put(
-  "/reset-password",
-  validator.resetPassword,
-  userController.resetPassword
+	"/reset-password",
+	validator.resetPassword,
+	userController.resetPassword
 );
 ROUTE.post(
-  "/verify-email",
-  validator.verifyEmailValidate,
-  userController.verifyEmail
+	"/verify-email",
+	validator.verifyEmailValidate,
+	userController.verifyEmail
 );
 
 ROUTE.post("/verify-otp", validator.signUpValidate, userController.signup);
 
 ROUTE.get(
-  "/get-user-self-details",
-  authenticationMiddleware(),
-  userController.getUserSelfDetails
+	"/get-user-self-details",
+	authenticationMiddleware(),
+	userController.getUserSelfDetails
 );
 
 ROUTE.get(
-  "/get-all-users",
-  authenticationMiddleware(),
-  userController.getAllUser
+	"/get-all-users",
+	authenticationMiddleware(),
+	userController.getAllUser
 );
 
-ROUTE.post("/add-friend", authenticationMiddleware(), userController.addFriend);
+ROUTE.get(
+	"/get-users-by-status",
+	authenticationMiddleware(),
+	userController.getUsersByStatus
+);
 
 module.exports = ROUTE;
