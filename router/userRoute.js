@@ -47,5 +47,10 @@ ROUTE.get(
 	authenticationMiddleware(),
 	userController.getUsersByStatus
 );
+ROUTE.get(
+	"/get-blocked-user",
+	authenticationMiddleware(),
+	userController.getBlockedUsers
+);
 
 module.exports = ROUTE;

@@ -12,6 +12,10 @@ USER_MODULE.getUser = async function (email) {
 	return await USER_MODEL.findOne(email);
 };
 
+USER_MODULE.getUserById = async function (id) {
+	return await USER_MODEL.findOne(id);
+};
+
 // Update user model
 USER_MODULE.updateUserDetails = async function (Email, userData) {
 	return await USER_MODEL.updateOne({ Email: Email }, userData);

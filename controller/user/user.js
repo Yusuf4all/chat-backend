@@ -1,13 +1,5 @@
 const { errorResponse, successResponse } = require("../../service/response");
-const {
-	getUser,
-	saveOtp,
-	updateUserDetails,
-	updateUserOtp,
-	getOTPData,
-	getAllUsers,
-} = require("../../model/module/index").userModule;
-
+const userOperation = require("../../model/module/index").userModule;
 const roomOperation = require("../../model/module/index").roomModule;
 
 const { bcryptHash } = require("../../service/crypto");
@@ -15,6 +7,7 @@ const { jwtSign, jwtVerify } = require("../../service/token");
 const sendMail = require("../../service/sendGrid");
 const typesAuthentication = require("./userHelper");
 const { getVerificationCode } = require("../../service/randomatic");
+const getModifiedObj = require("../../service/index").getModifiedObj;
 
 module.exports = {
 	//====================== User sign up ====================
@@ -59,7 +52,7 @@ module.exports = {
 		} = req;
 
 		try {
-			const USER_DATA = await getUser({ Email: Data.Email });
+			const USER_DATA = await userOperation.getUser({ Email: Data.Email });
 			if (!USER_DATA)
 				return errorResponse(res, 422, "User with given email doesn't exist.");
 
@@ -102,14 +95,16 @@ module.exports = {
 			errorResponse(res, 422, "Token expired");
 		}
 
-		const USER_DATA = await getUser({ Email: decodedToken.Email });
+		const USER_DATA = await userOperation.getUser({
+			Email: decodedToken.Email,
+		});
 		if (!USER_DATA) return errorResponse(res, 422, "User doesn't exist.");
 		const encrypedPassword = bcryptHash(Data.Password, 10);
 
 		const NEWPassword = {
 			Password: encrypedPassword,
 		};
-		await updateUserDetails(USER_DATA.Email, NEWPassword);
+		await userOperation.updateUserDetails(USER_DATA.Email, NEWPassword);
 		return successResponse(res, 200, "Password updated successfully.");
 	},
 
@@ -119,7 +114,7 @@ module.exports = {
 			body: { Data: Data },
 		} = req;
 		try {
-			const USER_DATA = await getUser({ Email: Data.Email });
+			const USER_DATA = await userOperation.getUser({ Email: Data.Email });
 			if (USER_DATA && USER_DATA.Authentication_Type !== "FACE_BOOK")
 				return errorResponse(res, 422, "User authenticated with another type.");
 			if (
@@ -134,12 +129,14 @@ module.exports = {
 					Email: Data.Email,
 				};
 
-				const existUser = await getOTPData({ Email: Data.Email });
+				const existUser = await userOperation.getOTPData({ Email: Data.Email });
 
 				if (existUser) {
-					updateUserOtp(USER_OTP_DETAILS.Email, { OTP: USER_OTP_DETAILS.OTP });
+					userOperation.updateUserOtp(USER_OTP_DETAILS.Email, {
+						OTP: USER_OTP_DETAILS.OTP,
+					});
 				} else {
-					saveOtp(USER_OTP_DETAILS);
+					userOperation.saveOtp(USER_OTP_DETAILS);
 				}
 
 				const USER_MAIL_DATA = {
@@ -164,7 +161,7 @@ module.exports = {
 	async getUserSelfDetails(req, res) {
 		const { user } = req;
 		try {
-			let USER_DETAILS = await getUser({ Email: user.Email });
+			let USER_DETAILS = await userOperation.getUser({ Email: user.Email });
 			if (!USER_DETAILS) return errorResponse(res, 422, "User not found");
 			USER_DETAILS = JSON.parse(JSON.stringify(USER_DETAILS));
 			delete USER_DETAILS["Password"];
@@ -178,42 +175,52 @@ module.exports = {
 	async getAllUser(req, res) {
 		const { user } = req;
 		try {
-			const ALL_USERS = await getAllUsers(user._id);
-			const UPDATED_USERS = await Promise.all(
-				ALL_USERS.map(async (ele) => {
-					const UPDATED_USER = {
-						First_Name: ele.First_Name,
-						Last_Name: ele.Last_Name,
-						Email: ele.Email,
-						_id: ele._id,
-						Phone_Number: ele.Phone_Number,
-						Blocked_By: "",
-					};
+			const ALL_USERS = await userOperation.getAllUsers(user._id);
+			const UPDATED_USERS = [];
+			for (let ele = 0; ele < ALL_USERS.length; ele++) {
+				const UPDATED_USER = {
+					First_Name: ALL_USERS[ele].First_Name,
+					Last_Name: ALL_USERS[ele].Last_Name,
+					Email: ALL_USERS[ele].Email,
+					_id: ALL_USERS[ele]._id,
+					Phone_Number: ALL_USERS[ele].Phone_Number,
+					Blocked_By: "",
+				};
 
-					let Room_Data = await roomOperation.getRoom(user._id, ele._id);
-					if (Room_Data) {
-						UPDATED_USER.Blocked_By = Room_Data.Blocked_By;
-
-						if (
-							JSON.parse(JSON.stringify(user._id)) === Room_Data.Sender_Id &&
-							Room_Data.Status === "Accept"
-						) {
-							UPDATED_USER.Status = "Pendding";
-						} else if (
-							JSON.parse(JSON.stringify(user._id)) === Room_Data.Sender_Id &&
-							Room_Data.Status === "Blocked"
-						) {
-							UPDATED_USER.Status = "Unblock";
-						} else {
-							UPDATED_USER.Status = Room_Data.Status;
-						}
-						return UPDATED_USER;
+				let Room_Data = await roomOperation.getRoom(
+					user._id,
+					ALL_USERS[ele]._id
+				);
+				if (Room_Data) {
+					UPDATED_USER.Blocked_By = Room_Data.Blocked_By;
+					if (
+						JSON.parse(JSON.stringify(user._id)) === Room_Data.Sender_Id &&
+						Room_Data.Status === "Accept"
+					) {
+						UPDATED_USER.Status = "Pendding";
+					} else if (
+						Room_Data.Blocked_By.find(
+							(id) => id === JSON.parse(JSON.stringify(user._id))
+						) &&
+						Room_Data.Status === "Blocked"
+					) {
+						continue;
+					} else if (
+						Room_Data.Blocked_By.find(
+							(id) => id !== JSON.parse(JSON.stringify(user._id))
+						) &&
+						Room_Data.Status === "Blocked"
+					) {
+						UPDATED_USER.Status = "Friend";
 					} else {
-						UPDATED_USER.Status = "Add";
-						return UPDATED_USER;
+						UPDATED_USER.Status = Room_Data.Status;
 					}
-				})
-			);
+				} else {
+					UPDATED_USER.Status = "Add";
+				}
+				UPDATED_USERS.push(UPDATED_USER);
+			}
+
 			return successResponse(res, 200, { ALL_USERS: UPDATED_USERS });
 		} catch (error) {
 			return errorResponse(res, 422, error.message);
@@ -228,6 +235,39 @@ module.exports = {
 				Status
 			);
 			return successResponse(res, 200, { filteredUser: FilteredRoom });
+		} catch (error) {
+			return errorResponse(res, 422, error.message);
+		}
+	},
+
+	// Get blocked user list =======================
+	async getBlockedUsers(req, res) {
+		const { user } = req;
+		try {
+			const BLOECKED_ROOMS = await roomOperation.getBlockedRoom(
+				JSON.parse(JSON.stringify(user._id))
+			);
+			let blockedUser = {};
+			const UPDATED_USERS = await Promise.all(
+				BLOECKED_ROOMS.map(async (room) => {
+					if (JSON.parse(JSON.stringify(user._id)) === room.From_User) {
+						blockedUser = await userOperation.getUserById({
+							_id: room.To_User,
+						});
+					} else {
+						blockedUser = await userOperation.getUserById({
+							_id: room.From_User,
+						});
+					}
+					const UPDATED_USER = getModifiedObj.getModifiedRoomAndUserObj(
+						blockedUser,
+						room
+					);
+					return UPDATED_USER;
+				})
+			);
+
+			return successResponse(res, 200, { BLOCKED_USERES: UPDATED_USERS });
 		} catch (error) {
 			return errorResponse(res, 422, error.message);
 		}

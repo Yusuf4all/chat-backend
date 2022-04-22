@@ -1,5 +1,6 @@
 const roomOperation = require("../../model/module/index").roomModule;
 const userOperation = require("../../model/module/index").userModule;
+const getModifiedObj = require("../index").getModifiedObj;
 
 module.exports = (socket, io) => {
 	socket.on("addFriend", async (fromUser, toUser) => {
@@ -58,7 +59,7 @@ module.exports = (socket, io) => {
 
 	socket.on("acceptFriendRequest", async (toUser, fromUser) => {
 		try {
-			const ROOM_DATA = await roomOperation.getRoom(toUser._id, fromUser._id);
+			var ROOM_DATA = await roomOperation.getRoom(toUser._id, fromUser._id);
 			if (ROOM_DATA) {
 				ROOM_DATA.Status = "Friend";
 				const UPDATED_ROOM = await roomOperation.updateRoomDetails(
@@ -66,12 +67,132 @@ module.exports = (socket, io) => {
 					toUser._id,
 					ROOM_DATA
 				);
+
 				if (UPDATED_ROOM.modifiedCount) {
-					io.to(toUser._id).emit("acceptedFriendRequest", fromUser);
-					io.to(fromUser._id).emit("acceptedFriendRequest", toUser);
+					ROOM_DATA = await roomOperation.getRoom(toUser._id, fromUser._id);
+					fromUser = getModifiedObj.getModifiedRoomAndUserObj(
+						fromUser,
+						ROOM_DATA
+					);
+					toUser = getModifiedObj.getModifiedRoomAndUserObj(toUser, ROOM_DATA);
+
+					io.to(toUser._id).emit("acceptedFriendRequest", fromUser, ROOM_DATA);
+					io.to(fromUser._id).emit("acceptedFriendRequest", toUser, ROOM_DATA);
 				}
 			} else {
-				socket.emit("errorResponse", "User not found.");
+				socket.emit("errorResponse", "Please refresh your browser.");
+			}
+		} catch (error) {
+			socket.emit("errorResponse", error.message);
+		}
+	});
+
+	socket.on("unfriendUser", async (actionUser, effectedUser) => {
+		try {
+			const EFFECTED_USER = await userOperation.getUser({
+				Email: effectedUser.Email,
+			});
+			if (!EFFECTED_USER) return socket.emit("errorResponse", "User not found");
+			const ROOM_DATA = await roomOperation.getRoom(
+				actionUser._id,
+				effectedUser._id
+			);
+			if (!ROOM_DATA)
+				return socket.emit("errorResponse", "Refresh your browser1.");
+
+			let isRoomDeleted = await roomOperation.deleteRoom(
+				actionUser._id,
+				effectedUser._id
+			);
+			if (isRoomDeleted.deletedCount) {
+				io.to(actionUser._id).emit(
+					"unfriendUserSuccess",
+					effectedUser,
+					ROOM_DATA
+				);
+				io.to(effectedUser._id).emit(
+					"unfriendUserSuccess",
+					actionUser,
+					ROOM_DATA
+				);
+			} else {
+				socket.emit("errorResponse", "Refresh your browser");
+			}
+		} catch (error) {
+			socket.emit("errorResponse", error.message);
+		}
+	});
+
+	socket.on("blockUser", async (actionUser, effectedUser) => {
+		try {
+			let ROOM_DATA = await roomOperation.getRoom(
+				actionUser._id,
+				effectedUser._id
+			);
+			if (ROOM_DATA) {
+				ROOM_DATA.Status = "Blocked";
+				ROOM_DATA.Blocked_By.push(actionUser._id);
+				let isRoomUpdate = await roomOperation.updateRoomDetails(
+					actionUser._id,
+					effectedUser._id,
+					ROOM_DATA
+				);
+
+				if (isRoomUpdate.modifiedCount) {
+					ROOM_DATA = await roomOperation.getRoom(
+						actionUser._id,
+						effectedUser._id
+					);
+					actionUser = getModifiedObj.getModifiedRoomAndUserObj(
+						actionUser,
+						ROOM_DATA
+					);
+					effectedUser = getModifiedObj.getModifiedRoomAndUserObj(
+						effectedUser,
+						ROOM_DATA
+					);
+
+					io.to(actionUser._id).emit("blockedUser", effectedUser, ROOM_DATA);
+					io.to(effectedUser._id).emit("blockedUser", actionUser, ROOM_DATA);
+				}
+			} else {
+				socket.emit("errorResponse", "Please refreash you browser");
+			}
+		} catch (error) {
+			socket.emit("errorResponse", error.message);
+		}
+	});
+
+	socket.on("unblockUser", async (actionUser, effectedUser) => {
+		try {
+			let roomData = await roomOperation.getRoom(
+				actionUser._id,
+				effectedUser._id
+			);
+			if (roomData) {
+				const BLOCKED_BY_USERS = roomData.Blocked_By.filter(
+					(id) => id !== JSON.parse(JSON.stringify(actionUser._id))
+				);
+				if (BLOCKED_BY_USERS.length === 0) roomData.Status = "Friend";
+				roomData.Blocked_By = BLOCKED_BY_USERS;
+				const IS_ROOM_UPDATED = await roomOperation.updateRoomDetails(
+					actionUser._id,
+					effectedUser._id,
+					roomData
+				);
+				if (IS_ROOM_UPDATED.modifiedCount) {
+					roomData = await roomOperation.getRoom(
+						actionUser._id,
+						effectedUser._id
+					);
+					effectedUser = getModifiedObj.getModifiedRoomAndUserObj(
+						effectedUser,
+						roomData
+					);
+					io.to(actionUser._id).emit("unblockedUser", effectedUser);
+				}
+			} else {
+				socket.emit("errorResponse", "Please refresh you browser.");
 			}
 		} catch (error) {
 			socket.emit("errorResponse", error.message);

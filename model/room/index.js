@@ -26,7 +26,14 @@ ROOM_MODULE.getFilteredRoom = async function (userId, status) {
 
 ROOM_MODULE.deleteRoom = async function (fromUserId, toUserId) {
 	return await ROOM_MODEL.deleteOne({
-		$and: [{ From_User: fromUserId }, { To_User: toUserId }],
+		$or: [
+			{
+				$and: [{ From_User: fromUserId }, { To_User: toUserId }],
+			},
+			{
+				$and: [{ From_User: toUserId }, { To_User: fromUserId }],
+			},
+		],
 	});
 };
 
@@ -44,6 +51,12 @@ ROOM_MODULE.updateRoomDetails = async function (
 		},
 		roomData
 	);
+};
+
+ROOM_MODULE.getBlockedRoom = async function (userId) {
+	return await ROOM_MODEL.find({
+		Blocked_By: { $in: [userId] },
+	});
 };
 
 module.exports = ROOM_MODULE;
